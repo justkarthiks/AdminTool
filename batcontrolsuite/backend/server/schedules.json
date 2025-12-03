@@ -1,0 +1,15 @@
+[
+    {
+        "id": 1764508848156,
+        "clientIP": "10.11.0.2",
+        "script": "test1",
+        "args": [],
+        "type": "weekly",
+        "schedule": {
+            "dayOfWeek": 0,
+            "time": "19:51"
+        },
+        "enabled": true,
+        "lastExecuted": null
+    }
+]

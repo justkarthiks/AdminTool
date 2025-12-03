@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>BAT Task Scheduler</title>
+    <style>
+        body { font-family: Arial; margin: 20px; }
+        input, select { padding: 5px; margin: 5px; }
+        button { padding: 8px 15px; margin: 5px; }
+        .task { border: 1px solid #ccc; padding: 10px; margin: 8px; }
+    </style>
+</head>
+<body>
+
+<h2>Create / Edit Scheduled Task</h2>
+
+<input type="hidden" id="taskId">
+
+<label>Client IP:</label>
+<input id="clientIP"><br>
+
+<label>Script Name:</label>
+<input id="script"><br>
+
+<label>Arguments (comma separated):</label>
+<input id="args"><br>
+
+<label>Schedule Type:</label>
+<select id="type" onchange="renderScheduleOptions()">
+    <option value="once">Once</option>
+    <option value="daily">Daily</option>
+    <option value="weekly">Weekly</option>
+    <option value="monthly">Monthly</option>
+</select><br>
+
+<div id="scheduleOptions"></div>
+
+<button onclick="saveTask()">Save Task</button>
+
+<hr>
+
+<h2>Scheduled Tasks</h2>
+<div id="taskList"></div>
+
+<script>
+function renderScheduleOptions(task = null) {
+    const type = document.getElementById("type").value;
+    const div = document.getElementById("scheduleOptions");
+
+    if (type === "once") {
+        div.innerHTML = `
+            <label>Date:</label>
+            <input id="date" type="date"><br>
+            <label>Time:</label>
+            <input id="time" type="time">
+        `;
+    }
+
+    if (type === "daily") {
+        div.innerHTML = `
+            <label>Time:</label>
+            <input id="time" type="time">
+        `;
+    }
+
+    if (type === "weekly") {
+        div.innerHTML = `
+            <label>Day of Week:</label>
+            <select id="dayOfWeek">
+                <option value="0">Sunday</option>
+                <option value="1">Monday</option>
+                <option value="2">Tuesday</option>
+                <option value="3">Wednesday</option>
+                <option value="4">Thursday</option>
+                <option value="5">Friday</option>
+                <option value="6">Saturday</option>
+            </select><br>
+            <label>Time:</label>
+            <input id="time" type="time">
+        `;
+    }
+
+    if (type === "monthly") {
+        div.innerHTML = `
+            <label>Day of Month:</label>
+            <input id="dayOfMonth" type="number" min="1" max="31"><br>
+            <label>Time:</label>
+            <input id="time" type="time">
+        `;
+    }
+
+    if (task) {
+        if (type === "once") {
+            document.getElementById("date").value = task.schedule.date;
+            document.getElementById("time").value = task.schedule.time;
+        }
+        if (type === "daily") {
+            document.getElementById("time").value = task.schedule.time;
+        }
+        if (type === "weekly") {
+            document.getElementById("dayOfWeek").value = task.schedule.dayOfWeek;
+            document.getElementById("time").value = task.schedule.time;
+        }
+        if (type === "monthly") {
+            document.getElementById("dayOfMonth").value = task.schedule.dayOfMonth;
+            document.getElementById("time").value = task.schedule.time;
+        }
+    }
+}
+
+async function saveTask() {
+    const id = document.getElementById("taskId").value || null;
+
+    let schedule = {};
+    const type = document.getElementById("type").value;
+
+    if (type === "once") {
+        schedule = {
+            date: document.getElementById("date").value,
+            time: document.getElementById("time").value
+        };
+    }
+    if (type === "daily") {
+        schedule = { time: document.getElementById("time").value };
+    }
+    if (type === "weekly") {
+        schedule = {
+            dayOfWeek: Number(document.getElementById("dayOfWeek").value),
+            time: document.getElementById("time").value
+        };
+    }
+    if (type === "monthly") {
+        schedule = {
+            dayOfMonth: Number(document.getElementById("dayOfMonth").value),
+            time: document.getElementById("time").value
+        };
+    }
+
+    const task = {
+        id: id ? Number(id) : null,
+        clientIP: clientIP.value,
+        script: script.value,
+        args: args.value ? args.value.split(",").map(a => a.trim()) : [],
+        type,
+        schedule,
+        enabled: true
+    };
+
+    const res = await fetch("/api/task/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(task)
+    });
+
+    if (res.status === 400) {
+        const data = await res.json();
+        alert(data.error);
+        return;
+    }
+
+    resetForm();
+    loadTasks();
+}
+
+function resetForm() {
+    taskId.value = "";
+    clientIP.value = "";
+    script.value = "";
+    args.value = "";
+    type.value = "once";
+    renderScheduleOptions();
+}
+
+async function loadTasks() {
+    const res = await fetch("/api/tasks");
+    const tasks = await res.json();
+
+    taskList.innerHTML = tasks.map(t => `
+        <div class="task">
+            <b>ID:</b> ${t.id}<br>
+            <b>Client:</b> ${t.clientIP}<br>
+            <b>Script:</b> ${t.script}<br>
+            <b>Type:</b> ${t.type}<br>
+            <b>Schedule:</b> ${JSON.stringify(t.schedule)}<br>
+            <b>Last Run:</b> ${t.lastExecuted || "Never"}<br><br>
+
+            <button onclick='editTask(${t.id})'>Edit</button>
+            <button onclick='deleteTask(${t.id})'>Delete</button>
+        </div>
+    `).join("");
+}
+
+async function editTask(id) {
+    const res = await fetch("/api/tasks");
+    const tasks = await res.json();
+    const task = tasks.find(t => t.id === id);
+
+    taskId.value = task.id;
+    clientIP.value = task.clientIP;
+    script.value = task.script;
+    args.value = task.args.join(",");
+    type.value = task.type;
+
+    renderScheduleOptions(task);
+}
+
+async function deleteTask(id) {
+    await fetch(`/api/task/${id}`, { method: "DELETE" });
+    loadTasks();
+}
+
+renderScheduleOptions();
+loadTasks();
+</script>
+
+</body>
+</html>
